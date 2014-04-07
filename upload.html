@@ -1,13 +1,21 @@
 <html>
 <head>
     <title>dividere - really simple file sharing.</title>
+    <script type="text/javascript">
+            function alertFilename()
+            {
+                var thefile = document.getElementById('file');
+                alert(thefile.value);
+            }
+        </script>
 </head>
 <body>
     <p>Upload a file:</p>
     <form action="/" method="POST"
           enctype="multipart/form-data">
-          <input type="file" name="uploaded_file">
-          <input type="submit" value="Upload">
+          <input type="file" name="uploaded_file"></input>
+          <input type="text" name="foovar"></input>
+          <input type="submit" value="Upload"></input>
     </form>
 </body>
 </html>

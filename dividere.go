@@ -32,11 +32,39 @@ func upload(w http.ResponseWriter, r *http.Request) {
     uploadTemplate.Execute(w, nil)
     return
   }
+  err := r.ParseMultipartForm(10000);
+if err != nil {
+        fmt.Println(err.Error())
+    } else {
+        fmt.Println("successfully parsed multipart form")
+    }
+for key, value := range r.MultipartForm.Value {
+		fmt.Printf("%s:%s", key, value)
+	}
+
+for _, fileHeaders := range r.MultipartForm.File {
+		for _, fileHeader := range fileHeaders {
+			//file, _ := fileHeader.Open()
+			path := fmt.Sprintf("files/%s", fileHeader.Filename)
+      fmt.Println("Would save to " + path);
+			//buf, _ := ioutil.ReadAll(file)
+			//ioutil.WriteFile(path, buf, os.ModePerm)
+		}
+	}
+
+  fmt.Printf("%v\n", r.FormValue("filename"))
   f, _, err := r.FormFile("uploaded_file")
-  check(err)
+  if err != nil {
+    fmt.Println("Error retrieving file from multipart form: " +
+    err.Error());
+    return
+  } 
   defer f.Close()
-  t, err := ioutil.TempFile("./", "image-")
-  check(err)
+  t, err := ioutil.TempFile("./f", "")
+  if err != nil {
+    fmt.Println("Cannot create temp file: " + err.Error());
+    return
+  } 
   defer t.Close()
   _, err = io.Copy(t, f)
   check(err)
@@ -54,5 +82,5 @@ func main() {
   fmt.Println("Starting server at " + listen_address)
   http.ListenAndServe(listen_address, nil)
   // Simple static webserver:
-	//log.Fatal(http.ListenAndServe(":8080", http.FileServer(http.Dir("/usr/share/doc"))))
+  //log.Fatal(http.ListenAndServe(":8080", http.FileServer(http.Dir("/usr/share/doc"))))
 }
