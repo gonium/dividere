@@ -16,12 +16,7 @@ var errorTemplate, _ = template.ParseFiles("html/error.html")
 
 var listen_address = "localhost:8080"
 var filesDirectory = "./f"
-
-//func check(err error) {
-//	if err != nil {
-//		panic(err)
-//	}
-//}
+var max_upload_size int64 = 100000
 
 func checkAndCreateDir(path string) {
 	absPath, err := pfp.Abs(path)
