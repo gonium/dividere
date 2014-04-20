@@ -9,15 +9,26 @@ import (
 	"os"
 	pfp "path/filepath"
   "github.com/dchest/uniuri"
+  "code.google.com/p/gcfg"
 )
+
+type ConfigurationData struct {
+    Network struct {
+        Host string
+        Port int32
+    }
+    Storage struct {
+      Directory string
+      MaxFileSize int64
+    }
+}
+
+var Cfg ConfigurationData
 
 var uploadTemplate, _ = template.ParseFiles("html/upload.html")
 var errorTemplate, _ = template.ParseFiles("html/error.html")
 var showTemplate, _ = template.ParseFiles("html/show.html")
 
-var listen_address = "localhost:8080"
-var filesDirectory = "./f"
-var max_upload_size int64 = 1000000
 
 func checkAndCreateDir(path string) {
 	absPath, err := pfp.Abs(path)
@@ -33,7 +44,7 @@ func checkAndCreateDir(path string) {
 					err.Error())
 			}
 		} else {
-			log.Fatal("Cannot use file storage directory " + filesDirectory +
+			log.Fatal("Cannot use file storage directory " + absPath +
 				": " + err.Error())
 		}
 	}
@@ -56,7 +67,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		uploadTemplate.Execute(w, nil)
 		return
 	}
-	err := r.ParseMultipartForm(10000)
+	err := r.ParseMultipartForm(Cfg.Storage.MaxFileSize)
 	if err != nil {
 		fmt.Println(err.Error())
 	} else {
@@ -65,12 +76,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
   randomURI := uniuri.New()
   fmt.Printf("URI: %s\n", randomURI)
   // Create a temp directory
-  absPath, err := pfp.Abs(filesDirectory)
+  absPath, err := pfp.Abs(Cfg.Storage.Directory)
   if err != nil {
     log.Fatal("Cannot determine absolute path for file storage: " +
     err.Error())
   }
-  tmpDir := fmt.Sprintf("%s/%s", absPath, randomURI)
+  tmpDir := pfp.Join(absPath, randomURI)
   err = os.Mkdir(tmpDir, os.ModePerm)
   if err != nil {
     log.Fatal("Cannot create temp dir for file storage: " + err.Error())
@@ -100,20 +111,40 @@ func show(w http.ResponseWriter, r *http.Request) {
     FilesURI []string
   }
   id := r.FormValue("id");
-  d := Data{Directory: id, FilesURI: []string{"foo", "bar", "baz"} }
-  err := showTemplate.Execute(w, d)
+  //d := Data{Directory: id, FilesURI: []string{"foo", "bar", "baz"} }
+  d := Data{Directory: id, FilesURI: []string{}}
+// Create a temp directory
+  absPath, err := pfp.Abs(Cfg.Storage.Directory)
+  if err != nil {
+    log.Fatal("Cannot determine absolute path for file storage: " +
+    err.Error())
+  }
+  tmpDir := pfp.Join(absPath, id)
+  // TODO: This is vulnerable to a directory traversal attack.
+  // Countermeasures needed!
+  files, _ := ioutil.ReadDir(tmpDir);
+  for _, f:= range files {
+    d.FilesURI = append(d.FilesURI, f.Name())
+  }
+  err = showTemplate.Execute(w, d)
   if err != nil {
     fmt.Printf("Error executing template: %s", err.Error())
   }
 }
 
 func main() {
-  checkAndCreateDir(filesDirectory)
+  err := gcfg.ReadFileInto(&Cfg, "dividere.conf")
+  if err != nil {
+    log.Fatal("Cannot read configuration file: " + err.Error());
+  }
+  listenAddress := fmt.Sprintf("%s:%d", Cfg.Network.Host, Cfg.Network.Port);
+  checkAndCreateDir(Cfg.Storage.Directory)
   http.HandleFunc("/", errorHandler(upload))
   http.HandleFunc("/view", errorHandler(view))
   http.HandleFunc("/show", errorHandler(show))
-  fmt.Println("Starting server at " + listen_address)
-  log.Fatal(http.ListenAndServe(listen_address, nil))
+
+  fmt.Println("Starting server at " + listenAddress)
+  log.Fatal(http.ListenAndServe(listenAddress, nil))
   // Simple static webserver:
   //log.Fatal(http.ListenAndServe(":8080", http.FileServer(http.Dir("/usr/share/doc"))))
 }
