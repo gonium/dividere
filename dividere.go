@@ -119,13 +119,21 @@ func show(w http.ResponseWriter, r *http.Request) {
     log.Fatal("Cannot determine absolute path for file storage: " +
     err.Error())
   }
-  tmpDir := pfp.Join(absPath, id)
   // TODO: This is vulnerable to a directory traversal attack.
   // Countermeasures needed!
-  files, _ := ioutil.ReadDir(tmpDir);
-  for _, f:= range files {
-    d.FilesURI = append(d.FilesURI, f.Name())
-  }
+  //tmpDir := pfp.Join(absPath, id)
+  //files, _ := ioutil.ReadDir(tmpDir);
+  //for _, f:= range files {
+  //  d.FilesURI = append(d.FilesURI, f.Name())
+  //}
+  found := false
+  _ = pfp.Walk(absPath, func(path string, info os.FileInfo, err error) error {
+    if (info.IsDir() && info.Name() == id) {
+      found=true;
+    }
+    fmt.Printf("path %s, found = %b, name = %s\n", path, found, info.Name());
+    return nil
+  })
   err = showTemplate.Execute(w, d)
   if err != nil {
     fmt.Printf("Error executing template: %s", err.Error())
