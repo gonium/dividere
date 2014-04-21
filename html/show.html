@@ -6,8 +6,8 @@
     <p>Datei erfolgreich hochgeladen</p>
     <p>{{.Directory}}</p>
     <ul>
-      {{range .FilesURI }}
-      <li>{{.}}</li>
+      {{range .FileList}}
+      <li>{{.FileName}} ({{.FileSizeReadable}}): <a href="{{.FileURI}}">{{.FileURI}}</a> </li>
       {{ end }}
     </ul>
 </body>

@@ -1,26 +1,32 @@
 package main
 
 import (
+	"code.google.com/p/gcfg"
 	"fmt"
+	"github.com/dchest/uniuri"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	pfp "path/filepath"
-  "github.com/dchest/uniuri"
-  "code.google.com/p/gcfg"
+	"strings"
 )
 
 type ConfigurationData struct {
-    Network struct {
-        Host string
-        Port int32
-    }
-    Storage struct {
-      Directory string
-      MaxFileSize int64
-    }
+	Network struct {
+		Host        string
+		Port        int32
+		ExternalURL string
+	}
+	Storage struct {
+		Directory   string
+		BaseURL     string
+		MaxFileSize int64
+	}
+	Misc struct {
+		BufferSize int64
+	}
 }
 
 var Cfg ConfigurationData
@@ -28,7 +34,6 @@ var Cfg ConfigurationData
 var uploadTemplate, _ = template.ParseFiles("html/upload.html")
 var errorTemplate, _ = template.ParseFiles("html/error.html")
 var showTemplate, _ = template.ParseFiles("html/show.html")
-
 
 func checkAndCreateDir(path string) {
 	absPath, err := pfp.Abs(path)
@@ -73,86 +78,126 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Println("successfully parsed multipart form")
 	}
-  randomURI := uniuri.New()
-  fmt.Printf("URI: %s\n", randomURI)
-  // Create a temp directory
-  absPath, err := pfp.Abs(Cfg.Storage.Directory)
-  if err != nil {
-    log.Fatal("Cannot determine absolute path for file storage: " +
-    err.Error())
-  }
-  tmpDir := pfp.Join(absPath, randomURI)
-  err = os.Mkdir(tmpDir, os.ModePerm)
-  if err != nil {
-    log.Fatal("Cannot create temp dir for file storage: " + err.Error())
-  }
-  for _, fileHeaders := range r.MultipartForm.File {
-    for _, fileHeader := range fileHeaders {
-      file, _ := fileHeader.Open()
+	randomURI := uniuri.New()
+	fmt.Printf("URI: %s\n", randomURI)
+	// Create a temp directory
+	absPath, err := pfp.Abs(Cfg.Storage.Directory)
+	if err != nil {
+		log.Fatal("Cannot determine absolute path for file storage: " +
+			err.Error())
+	}
+	tmpDir := pfp.Join(absPath, randomURI)
+	err = os.Mkdir(tmpDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("Cannot create temp dir for file storage: " + err.Error())
+	}
+	for _, fileHeaders := range r.MultipartForm.File {
+		for _, fileHeader := range fileHeaders {
+			file, _ := fileHeader.Open()
 
-      // Calculate path for file storage
-      path := fmt.Sprintf("%s/%s", tmpDir, fileHeader.Filename)
-      fmt.Printf("Saving %s\n", path)
-      buf, _ := ioutil.ReadAll(file)
-      ioutil.WriteFile(path, buf, os.ModePerm)
-    }
-  }
-  http.Redirect(w, r, "/show?id="+randomURI, 302)
+			// Calculate path for file storage
+			path := fmt.Sprintf("%s/%s", tmpDir, fileHeader.Filename)
+			fmt.Printf("Saving %s\n", path)
+			buf, _ := ioutil.ReadAll(file)
+			ioutil.WriteFile(path, buf, os.ModePerm)
+		}
+	}
+	http.Redirect(w, r, "/show?id="+randomURI, 302)
 }
 
-func view(w http.ResponseWriter, r *http.Request) {
-  w.Header().Set("Content-Type", "image")
-  http.ServeFile(w, r, "image-"+r.FormValue("id"))
+func mkReadableSize(byteSize int64) string {
+	unit := "B"
+	value := byteSize
+	if byteSize > 1024 {
+		unit = "KB"
+		value = byteSize / 1024
+	}
+	if byteSize > 1024*1024 {
+		unit = "MB"
+		value = byteSize / (1024 * 1024)
+	}
+	if byteSize > 1024*1024*1024 {
+		unit = "GB"
+		value = byteSize / (1024 * 1024 * 1024)
+	}
+	return fmt.Sprintf("%d %s", value, unit)
 }
 
 func show(w http.ResponseWriter, r *http.Request) {
-  type Data struct {
-    Directory string
-    FilesURI []string
-  }
-  id := r.FormValue("id");
-  //d := Data{Directory: id, FilesURI: []string{"foo", "bar", "baz"} }
-  d := Data{Directory: id, FilesURI: []string{}}
-// Create a temp directory
-  absPath, err := pfp.Abs(Cfg.Storage.Directory)
-  if err != nil {
-    log.Fatal("Cannot determine absolute path for file storage: " +
-    err.Error())
-  }
-  // TODO: This is vulnerable to a directory traversal attack.
-  // Countermeasures needed!
-  //tmpDir := pfp.Join(absPath, id)
-  //files, _ := ioutil.ReadDir(tmpDir);
-  //for _, f:= range files {
-  //  d.FilesURI = append(d.FilesURI, f.Name())
-  //}
-  found := false
-  _ = pfp.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-    if (info.IsDir() && info.Name() == id) {
-      found=true;
-    }
-    fmt.Printf("path %s, found = %b, name = %s\n", path, found, info.Name());
-    return nil
-  })
-  err = showTemplate.Execute(w, d)
-  if err != nil {
-    fmt.Printf("Error executing template: %s", err.Error())
-  }
+	type FileData struct {
+		FileName         string
+		FileURI          string
+		FileSizeReadable string
+	}
+	type Data struct {
+		Directory    string
+		FileList     []FileData
+		ErrorCode    int
+		ErrorMessage string
+	}
+	id := r.FormValue("id")
+	d := new(Data)
+	d.Directory = id
+	d.FileList = []FileData{}
+	//d := Data{ Directory: id, FileData: []{FileName: "Foo", FileURI: "Uschi"} }
+	// Create a temp directory
+	absPath, err := pfp.Abs(Cfg.Storage.Directory)
+	if err != nil {
+		log.Fatal("Cannot determine absolute path for file storage: " +
+			err.Error())
+	}
+	// Note: The runtime complexity of the directory traversal might be
+	// too high for big installations, but let's worry about that when we
+	// have a big installation.
+	found := false
+	_ = pfp.Walk(absPath, func(currentPath string, info os.FileInfo, err error) error {
+		if info.IsDir() && info.Name() == id {
+			found = true
+			// for all files in our target directory: add files to our info
+			// structure.
+			_ = pfp.Walk(currentPath, func(currentPath string,
+				info os.FileInfo, err error) error {
+				if !info.IsDir() {
+					components := []string{
+						Cfg.Network.ExternalURL,
+						Cfg.Storage.BaseURL,
+						d.Directory,
+						info.Name()}
+					uri := strings.Join(components, "/")
+					fileEntry := FileData{FileName: info.Name(), FileURI: uri,
+						FileSizeReadable: mkReadableSize(info.Size())}
+					d.FileList = append(d.FileList, fileEntry)
+				}
+				return nil
+			})
+		}
+		return nil
+	})
+	if found {
+		err = showTemplate.Execute(w, d)
+		if err != nil {
+			fmt.Printf("Error executing template: %s", err.Error())
+		}
+	} else {
+		// the data directory was not found - render a 404 error page
+		w.WriteHeader(http.StatusNotFound)
+		d.ErrorCode = http.StatusNotFound
+		d.ErrorMessage = "These are not the bytes you're looking for."
+		err = errorTemplate.Execute(w, d)
+	}
 }
 
 func main() {
-  err := gcfg.ReadFileInto(&Cfg, "dividere.conf")
-  if err != nil {
-    log.Fatal("Cannot read configuration file: " + err.Error());
-  }
-  listenAddress := fmt.Sprintf("%s:%d", Cfg.Network.Host, Cfg.Network.Port);
-  checkAndCreateDir(Cfg.Storage.Directory)
-  http.HandleFunc("/", errorHandler(upload))
-  http.HandleFunc("/view", errorHandler(view))
-  http.HandleFunc("/show", errorHandler(show))
-
-  fmt.Println("Starting server at " + listenAddress)
-  log.Fatal(http.ListenAndServe(listenAddress, nil))
-  // Simple static webserver:
-  //log.Fatal(http.ListenAndServe(":8080", http.FileServer(http.Dir("/usr/share/doc"))))
+	err := gcfg.ReadFileInto(&Cfg, "dividere.conf")
+	if err != nil {
+		log.Fatal("Cannot read configuration file: " + err.Error())
+	}
+	listenAddress := fmt.Sprintf("%s:%d", Cfg.Network.Host, Cfg.Network.Port)
+	checkAndCreateDir(Cfg.Storage.Directory)
+	http.HandleFunc("/", errorHandler(upload))
+	http.HandleFunc("/show", errorHandler(show))
+	http.Handle(Cfg.Storage.BaseURL, http.StripPrefix(Cfg.Storage.BaseURL,
+		http.FileServer(http.Dir(Cfg.Storage.Directory))))
+	fmt.Println("Starting server at " + listenAddress)
+	log.Fatal(http.ListenAndServe(listenAddress, nil))
 }
