@@ -112,7 +112,7 @@ func upload(w http.ResponseWriter, r *http.Request, params martini.Params) {
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
 			// Calculate path for file storage
-			path := fmt.Sprintf("%s/%s", tmpDir, fileHeader.Filename)
+			path := pfp.Join(tmpDir, fileHeader.Filename)
 			fmt.Printf("Saving %s\n", path)
 			buf, _ := ioutil.ReadAll(file)
 			ioutil.WriteFile(path, buf, os.ModePerm)
