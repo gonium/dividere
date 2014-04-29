@@ -188,7 +188,8 @@ func show(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	err := gcfg.ReadFileInto(&Cfg, "dividere.conf")
+	// TODO: Commandline parameter parsing
+	err := gcfg.ReadFileInto(&Cfg, "teilomat.conf")
 	if err != nil {
 		log.Fatal("Cannot read configuration file: " + err.Error())
 	}
