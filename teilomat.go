@@ -2,6 +2,7 @@ package main
 
 import (
 	"code.google.com/p/gcfg"
+	"encoding/json"
 	"fmt"
 	"github.com/dchest/uniuri"
 	"github.com/go-martini/martini"
@@ -77,6 +78,40 @@ func index(w http.ResponseWriter, r *http.Request) {
 	indexTemplate.Execute(w, nil)
 }
 
+type randomStorageLocation struct {
+	TmpDir string
+	TmpURI string
+}
+
+func mkTmpLocation() (randomStorageLocation, error) {
+	randomURI := uniuri.New()
+	// Create a temp directory
+	absPath, err := pfp.Abs(pfp.Join(Cfg.Storage.AssetDirectory,
+		Cfg.Storage.FileBaseDirectory))
+	if err != nil {
+		return randomStorageLocation{}, err
+	}
+	tmpDir := pfp.Join(absPath, randomURI)
+	if err = os.Mkdir(tmpDir, os.ModePerm); err != nil {
+		return randomStorageLocation{}, err
+	}
+	return randomStorageLocation{tmpDir, randomURI}, nil
+}
+
+type DataCollection struct {
+	URI string
+}
+
+func createDataCollection(w http.ResponseWriter, params martini.Params) (int, string) {
+	w.Header().Set("Content-Type", "application/json")
+	uriValue := "foobar-URI"
+	if b, err := json.Marshal(DataCollection{URI: uriValue}); err != nil {
+		return http.StatusConflict, "Failed to create URI"
+	} else {
+		return http.StatusCreated, string(b)
+	}
+}
+
 func upload(w http.ResponseWriter, r *http.Request, params martini.Params) {
 	err := r.ParseMultipartForm(Cfg.Storage.MaxFileSize)
 	if err != nil {
@@ -88,18 +123,7 @@ func upload(w http.ResponseWriter, r *http.Request, params martini.Params) {
 	}
 
 	//id := params["id"] //r.FormValue("id")
-
-	randomURI := uniuri.New()
-	fmt.Printf("URI: %s\n", randomURI)
-	// Create a temp directory
-	absPath, err := pfp.Abs(pfp.Join(Cfg.Storage.AssetDirectory,
-		Cfg.Storage.FileBaseDirectory))
-	if err != nil {
-		log.Fatal("Cannot determine absolute path for file storage: " +
-			err.Error())
-	}
-	tmpDir := pfp.Join(absPath, randomURI)
-	err = os.Mkdir(tmpDir, os.ModePerm)
+	tmpLocation, err := mkTmpLocation()
 	if err != nil {
 		// the data directory was not found - render a 500 error page
 		d := new(ErrorData)
@@ -112,13 +136,12 @@ func upload(w http.ResponseWriter, r *http.Request, params martini.Params) {
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
 			// Calculate path for file storage
-			path := pfp.Join(tmpDir, fileHeader.Filename)
-			fmt.Printf("Saving %s\n", path)
+			path := pfp.Join(tmpLocation.TmpDir, fileHeader.Filename)
 			buf, _ := ioutil.ReadAll(file)
 			ioutil.WriteFile(path, buf, os.ModePerm)
 		}
 	}
-	http.Redirect(w, r, "/show/"+randomURI, 302)
+	http.Redirect(w, r, "/show/"+tmpLocation.TmpURI, 302)
 }
 
 func mkReadableSize(byteSize int64) string {
@@ -215,6 +238,7 @@ func main() {
 	fmt.Println("Starting server at " + listenAddress)
 	m := martini.Classic()
 	m.Get("/", errorHandler(index))
+	m.Post("/createcollection", createDataCollection)
 	m.Post("/upload", upload)
 	m.Get("/show/:id", show)
 	m.Use(martini.Static(Cfg.Storage.AssetDirectory))
