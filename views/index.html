@@ -1,7 +1,11 @@
 {{define "index"}}
   {{template "header"}}
+  <div class="jumbotron">
+    <h1>Hello, world!</h1>
+    <p>This is a template for a simple marketing or informational website. It includes a large callout called a jumbotron and three supporting pieces of content. Use it as a starting point to create something more unique.</p>
+    <p><a href="#" class="btn btn-primary btn-lg" role="button">Learn more &raquo;</a></p>
     <p>Upload a file:</p>
-    <form id="upload_form" enctype="multipart/form-data" action="/upload" method="POST">
+    <form id="upload_form" enctype="multipart/form-data" method="POST">
       <div class="row">
         <label for="fileToUpload">Select a File to Upload</label><br />
         <input type="file" name="fileToUpload" id="fileToUpload" onchange="fileSelected();"/>
@@ -13,7 +17,13 @@
       <div class="row">
         <input type="button" onclick="triggerUpload()" value="Upload" />
       </div>
-      <div id="progressNumber"></div>
+      <div class="progress progress-striped active">
+        <div id="uploadProgressBar" class="progress-bar"
+        role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%">
+          <span class="sr-only"></span>
+        </div>
+      </div>
     </form>
+  </div>
   {{template "footer"}}
-{{end}}
+  {{end}}
