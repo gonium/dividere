@@ -3,6 +3,7 @@ package main
 import (
 	"code.google.com/p/gcfg"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dchest/uniuri"
 	"github.com/go-martini/martini"
@@ -51,7 +52,7 @@ func checkAndCreateDir(path string) {
 	if _, err := os.Stat(absPath); err != nil {
 		if os.IsNotExist(err) {
 			fmt.Printf("File directory %s does not exist - creating it\n", absPath)
-			if err := os.Mkdir(absPath, os.ModeDir|0777); err != nil {
+			if err := os.MkdirAll(absPath, os.ModeDir|0777); err != nil {
 				log.Fatal("Cannot create file directory " + absPath + ": " +
 					err.Error())
 			}
@@ -98,50 +99,74 @@ func mkTmpLocation() (randomStorageLocation, error) {
 	return randomStorageLocation{tmpDir, randomURI}, nil
 }
 
+func getTmpLocation(uri string) (randomStorageLocation, error) {
+	// look for the directory.
+	absPath, err := pfp.Abs(pfp.Join(Cfg.Storage.AssetDirectory,
+		Cfg.Storage.FileBaseDirectory))
+	if err != nil {
+		log.Fatal("Cannot determine absolute path for file storage: " +
+			err.Error())
+	}
+	found := false
+	var tmpLocation randomStorageLocation
+	_ = pfp.Walk(absPath, func(currentPath string, info os.FileInfo, err error) error {
+		if info.IsDir() && info.Name() == uri {
+			found = true
+			tmpDir := pfp.Join(absPath, info.Name())
+			tmpLocation = randomStorageLocation{TmpDir: tmpDir, TmpURI: uri}
+		}
+		return nil
+	})
+	if !found {
+		return randomStorageLocation{}, errors.New("Unable to find tmp directory")
+	} else {
+		return tmpLocation, nil
+	}
+}
+
 type DataCollection struct {
 	URI string
 }
 
 func createDataCollection(w http.ResponseWriter, params martini.Params) (int, string) {
 	w.Header().Set("Content-Type", "application/json")
-	uriValue := "foobar-URI"
-	if b, err := json.Marshal(DataCollection{URI: uriValue}); err != nil {
+	tmpLocation, err := mkTmpLocation()
+	if err != nil {
+		return http.StatusConflict, "Failed to create URI - " + err.Error()
+	}
+	if b, err := json.Marshal(DataCollection{URI: tmpLocation.TmpURI}); err != nil {
 		return http.StatusConflict, "Failed to create URI"
 	} else {
 		return http.StatusCreated, string(b)
 	}
 }
 
-func upload(w http.ResponseWriter, r *http.Request, params martini.Params) {
+func upload(w http.ResponseWriter, r *http.Request, params martini.Params) (int, string) {
+	w.Header().Set("Content-Type", "application/json")
 	err := r.ParseMultipartForm(Cfg.Storage.MaxFileSize)
 	if err != nil {
-		d := new(ErrorData)
-		w.WriteHeader(http.StatusInternalServerError)
-		d.ErrorCode = http.StatusInternalServerError
-		d.ErrorMessage = "We failed processing your input. We're truly sorry about that."
-		err = errorTemplate.Execute(w, d)
+		return http.StatusInternalServerError, "Failed to parse incoming data"
 	}
-
-	//id := params["id"] //r.FormValue("id")
-	tmpLocation, err := mkTmpLocation()
+	dataset := params["dataset"]
+	fmt.Println("dataset: " + dataset)
+	tmpLocation, err := getTmpLocation(dataset)
 	if err != nil {
-		// the data directory was not found - render a 500 error page
-		d := new(ErrorData)
-		w.WriteHeader(http.StatusInternalServerError)
-		d.ErrorCode = http.StatusInternalServerError
-		d.ErrorMessage = "We failed. We're truly sorry about that."
-		err = errorTemplate.Execute(w, d)
+		return http.StatusNotFound,
+			"Cannot locate this data collection: " + dataset
 	}
 	for _, fileHeaders := range r.MultipartForm.File {
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
 			// Calculate path for file storage
+			fmt.Printf("Filename %s\n", fileHeader.Filename)
+			fmt.Printf("TmpLocation %s\n", tmpLocation.TmpDir)
 			path := pfp.Join(tmpLocation.TmpDir, fileHeader.Filename)
+			fmt.Printf("Path %s\n", path)
 			buf, _ := ioutil.ReadAll(file)
 			ioutil.WriteFile(path, buf, os.ModePerm)
 		}
 	}
-	http.Redirect(w, r, "/show/"+tmpLocation.TmpURI, 302)
+	return http.StatusOK, "/show/" + tmpLocation.TmpURI
 }
 
 func mkReadableSize(byteSize int64) string {
@@ -174,12 +199,10 @@ func show(w http.ResponseWriter, r *http.Request, params martini.Params) {
 		ErrorCode    int
 		ErrorMessage string
 	}
-	id := params["id"] //r.FormValue("id")
+	id := params["id"]
 	d := new(Data)
 	d.Directory = id
 	d.FileList = []FileData{}
-	//d := Data{ Directory: id, FileData: []{FileName: "Foo", FileURI: "Uschi"} }
-	// Create a temp directory
 	absPath, err := pfp.Abs(pfp.Join(Cfg.Storage.AssetDirectory,
 		Cfg.Storage.FileBaseDirectory))
 	if err != nil {
@@ -239,7 +262,7 @@ func main() {
 	m := martini.Classic()
 	m.Get("/", errorHandler(index))
 	m.Post("/createcollection", createDataCollection)
-	m.Post("/upload", upload)
+	m.Post("/upload/:dataset", upload)
 	m.Get("/show/:id", show)
 	m.Use(martini.Static(Cfg.Storage.AssetDirectory))
 	log.Fatal(http.ListenAndServe(listenAddress, m))
