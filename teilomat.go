@@ -39,6 +39,8 @@ type ErrorData struct {
 
 var Cfg ConfigurationData
 
+// extend to use header and footer
+//http://stackoverflow.com/questions/17206467/go-how-to-render-multiple-templates-in-golang
 var indexTemplate, _ = template.ParseFiles("views/index.html")
 var errorTemplate, _ = template.ParseFiles("views/error.html")
 var showTemplate, _ = template.ParseFiles("views/show.html")
@@ -158,10 +160,7 @@ func upload(w http.ResponseWriter, r *http.Request, params martini.Params) (int,
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
 			// Calculate path for file storage
-			fmt.Printf("Filename %s\n", fileHeader.Filename)
-			fmt.Printf("TmpLocation %s\n", tmpLocation.TmpDir)
 			path := pfp.Join(tmpLocation.TmpDir, fileHeader.Filename)
-			fmt.Printf("Path %s\n", path)
 			buf, _ := ioutil.ReadAll(file)
 			ioutil.WriteFile(path, buf, os.ModePerm)
 		}
