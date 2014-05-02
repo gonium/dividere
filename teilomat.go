@@ -41,9 +41,21 @@ var Cfg ConfigurationData
 
 // extend to use header and footer
 //http://stackoverflow.com/questions/17206467/go-how-to-render-multiple-templates-in-golang
-var indexTemplate, _ = template.ParseFiles("views/index.html")
-var errorTemplate, _ = template.ParseFiles("views/error.html")
-var showTemplate, _ = template.ParseFiles("views/show.html")
+//var indexTemplate, _ = template.ParseFiles("views/index.html")
+//var errorTemplate, _ = template.ParseFiles("views/error.html")
+//var showTemplate, _ = template.ParseFiles("views/show.html")
+
+var templates *template.Template
+
+func init() {
+	// TODO: Commandline parameter parsing
+	err := gcfg.ReadFileInto(&Cfg, "teilomat.conf")
+	if err != nil {
+		log.Fatal("Cannot read configuration file: " + err.Error())
+	}
+	checkAndCreateDir(pfp.Join(Cfg.Storage.AssetDirectory, Cfg.Storage.FileBaseDirectory))
+	templates = template.Must(template.ParseGlob("views/*"))
+}
 
 func checkAndCreateDir(path string) {
 	absPath, err := pfp.Abs(path)
@@ -70,7 +82,7 @@ func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
 		defer func() {
 			if e, ok := recover().(error); ok {
 				w.WriteHeader(500)
-				errorTemplate.Execute(w, e)
+				templates.ExecuteTemplate(w, "error", e)
 			}
 		}()
 		fn(w, r)
@@ -78,7 +90,7 @@ func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	indexTemplate.Execute(w, nil)
+	templates.ExecuteTemplate(w, "index", nil)
 }
 
 type randomStorageLocation struct {
@@ -236,7 +248,8 @@ func show(w http.ResponseWriter, r *http.Request, params martini.Params) {
 		return nil
 	})
 	if found {
-		err = showTemplate.Execute(w, d)
+		//err = showTemplate.Execute(w, d)
+		err = templates.ExecuteTemplate(w, "show", d)
 		if err != nil {
 			fmt.Printf("Error executing template: %s", err.Error())
 		}
@@ -245,18 +258,12 @@ func show(w http.ResponseWriter, r *http.Request, params martini.Params) {
 		w.WriteHeader(http.StatusNotFound)
 		d.ErrorCode = http.StatusNotFound
 		d.ErrorMessage = "These are not the bytes you're looking for."
-		err = errorTemplate.Execute(w, d)
+		err = templates.ExecuteTemplate(w, "error", d)
 	}
 }
 
 func main() {
-	// TODO: Commandline parameter parsing
-	err := gcfg.ReadFileInto(&Cfg, "teilomat.conf")
-	if err != nil {
-		log.Fatal("Cannot read configuration file: " + err.Error())
-	}
 	listenAddress := fmt.Sprintf("%s:%d", Cfg.Network.Host, Cfg.Network.Port)
-	checkAndCreateDir(pfp.Join(Cfg.Storage.AssetDirectory, Cfg.Storage.FileBaseDirectory))
 	fmt.Println("Starting server at " + listenAddress)
 	m := martini.Classic()
 	m.Get("/", errorHandler(index))

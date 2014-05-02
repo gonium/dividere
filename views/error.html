@@ -1,9 +1,6 @@
-<html>
-<head>
-    <title>teilom.at</title>
-</head>
-<body>
+{{define "error"}}
+  {{template "header"}}
     <p>Der Teilomat versagt!</p>
     <p>{{.ErrorCode}} &mdash; {{.ErrorMessage}}</p>
-</body>
-</html>
+  {{template "footer"}}
+{{end}}

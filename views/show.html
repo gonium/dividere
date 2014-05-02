@@ -1,8 +1,5 @@
-<html>
-<head>
-    <title>teilom.at</title>
-</head>
-<body>
+{{define "show"}}
+  {{template "header"}}
     <p>Datei erfolgreich hochgeladen</p>
     <p>{{.Directory}}</p>
     <ul>
@@ -10,5 +7,5 @@
       <li>{{.FileName}} ({{.FileSizeReadable}}): <a href="{{.FileURI}}">{{.FileURI}}</a> </li>
       {{ end }}
     </ul>
-</body>
-</html>
+  {{template "footer"}}
+{{end}}
