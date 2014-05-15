@@ -1,4 +1,5 @@
 function fileSelected() {
+  console.log("fileselected started.")
   var file = document.getElementById('fileToUpload').files[0];
   if (file) {
     var fileSize = 0;
@@ -28,14 +29,15 @@ function uploadFile(datasetURI) {
 function uploadProgress(evt) {
   if (evt.lengthComputable) {
     var percentComplete = Math.round(evt.loaded * 100 / evt.total);
-    document.getElementById('progressNumber').innerHTML = percentComplete.toString() + '%';
+    //document.getElementById('progressNumber').innerHTML = percentComplete.toString() + '%';
     //$(".uploadProgressBar").css("width", percentComplete.toString() + '%');
     //var uploadBar = document.getElementById("uploadProgressBar");
     //uploadBar.style.width = percentComplete.toString() + '%';
-    $('.progress-bar').css('width', percentComplete.toString()+'%').attr('aria-valuenow', percentComplete.toString()); 
+    console.log("progress: " + percentComplete.toString());
+    $('#uploadProgressBar.progress-bar').css('width', percentComplete.toString()+'%').attr('aria-valuenow', percentComplete.toString()); 
   }
   else {
-    document.getElementById('progressNumber').innerHTML = 'unable to compute';
+    document.getElementById('flash').innerHTML = 'unable to compute';
   }
 }
 
