@@ -8,4 +8,5 @@ A very simple file sharing application.
 * [Build a RESTful API with Martini](http://0value.com/build-a-restful-API-with-Martini)
 * [New Tricks in XMLHttpRequest2](http://www.html5rocks.com/en/tutorials/file/xhr2/) - deals also with uploading multiple files.
 * [Processing XHR2 file uploads in PHP](http://updates.html5rocks.com/2012/04/Processing-XHR2-file-uploads-in-PHP) - simple example w/ server and client code.
+* [ResumableJS](http://resumablejs.com) - Chunk-based upload of files.
 
