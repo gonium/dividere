@@ -4,6 +4,34 @@
     <h1>Hello, world!</h1>
     <p>This is a template for a simple marketing or informational website. It includes a large callout called a jumbotron and three supporting pieces of content. Use it as a starting point to create something more unique.</p>
     <p><a href="#" class="btn btn-primary btn-lg" role="button">Learn more &raquo;</a></p>
+
+      <div class="resumable-error">
+        Your browser, unfortunately, is not supported by Resumable.js. The library requires support for <a href="http://www.w3.org/TR/FileAPI/">the HTML5 File API</a> along with <a href="http://www.w3.org/TR/FileAPI/#normalization-of-params">file slicing</a>.
+      </div>
+
+      <div id="flash"></div>
+
+      <div class="resumable-drop" ondragenter="jQuery(this).addClass('resumable-dragover');" ondragend="jQuery(this).removeClass('resumable-dragover');" ondrop="jQuery(this).removeClass('resumable-dragover');">
+        Drop video files here to upload or <a class="resumable-browse"><u>select from your computer</u></a>
+      </div>
+      
+      <div class="resumable-progress">
+        <table>
+          <tr>
+            <td width="100%"><div class="progress-container"><div class="progress-bar"></div></div></td>
+            <td class="progress-text" nowrap="nowrap"></td>
+            <td class="progress-pause" nowrap="nowrap">
+              <a href="#" onclick="r.upload(); return(false);" class="progress-resume-link"><img src="/img/resume.png" title="Resume upload" /></a>
+              <a href="#" onclick="r.pause(); return(false);" class="progress-pause-link"><img src="/img/pause.png" title="Pause upload" /></a>
+              <a href="#" onclick="r.cancel(); return(false);" class="progress-cancel-link"><img src="/img/cancel.png" title="Cancel upload" /></a>
+            </td>
+          </tr>
+        </table>
+      </div>
+      
+      <ul class="resumable-list"></ul>
+ 
+    <!--
     <p>Upload a file:</p>
     <form id="upload_form" enctype="multipart/form-data" method="POST">
       <div class="row">
@@ -24,6 +52,7 @@
         </div>
       </div>
     </form>
+    -->
   </div>
   {{template "footer"}}
   {{end}}

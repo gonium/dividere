@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	pfp "path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -155,14 +156,43 @@ func createDataCollection(w http.ResponseWriter, params martini.Params) (int, st
 	}
 }
 
+type ResumableData struct {
+	ChunkNumber int
+	ChunkSize   int
+	TotalChunks int
+	TotalSize   int
+	Identifier  string
+	Filename    string
+}
+
+func (r ResumableData) String() string {
+	return "<" + r.Filename + ": " + strconv.Itoa(r.TotalSize) + " bytes, " +
+		strconv.Itoa(r.ChunkNumber) + "/" +
+		strconv.Itoa(r.TotalChunks) + " chunks>"
+}
+
 func upload(w http.ResponseWriter, r *http.Request, params martini.Params) (int, string) {
 	w.Header().Set("Content-Type", "application/json")
 	err := r.ParseMultipartForm(Cfg.Storage.MaxFileSize)
 	if err != nil {
 		return http.StatusInternalServerError, "Failed to parse incoming data"
 	}
+	// Parse data from the resumable.js library
+	chunkNumber, _ := strconv.Atoi(r.FormValue("resumableChunkNumber"))
+	chunkSize, _ := strconv.Atoi(r.FormValue("resumableChunkSize"))
+	totalChunks, _ := strconv.Atoi(r.FormValue("resumableTotalChunks"))
+	totalSize, _ := strconv.Atoi(r.FormValue("resumableTotalSize"))
+	resumable := ResumableData{
+		ChunkNumber: chunkNumber,
+		ChunkSize:   chunkSize,
+		TotalChunks: totalChunks,
+		TotalSize:   totalSize,
+		Identifier:  r.FormValue("resumableIdentifier"),
+		Filename:    r.FormValue("resumableFilename"),
+	}
 	dataset := params["dataset"]
-	fmt.Println("dataset: " + dataset)
+	fmt.Printf("dataset %s, received: %s\n", dataset, resumable)
+	// store this chunk
 	tmpLocation, err := getTmpLocation(dataset)
 	if err != nil {
 		return http.StatusNotFound,
@@ -172,11 +202,13 @@ func upload(w http.ResponseWriter, r *http.Request, params martini.Params) (int,
 		for _, fileHeader := range fileHeaders {
 			file, _ := fileHeader.Open()
 			// Calculate path for file storage
+			// TODO: Append number to chunk, use resumableIdentifier for this
 			path := pfp.Join(tmpLocation.TmpDir, fileHeader.Filename)
 			buf, _ := ioutil.ReadAll(file)
 			ioutil.WriteFile(path, buf, os.ModePerm)
 		}
 	}
+	// TODO: When last chunk received: gather chunks and redirect
 	return http.StatusOK, "/show/" + tmpLocation.TmpURI
 }
 
